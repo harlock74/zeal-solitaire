@@ -10,7 +10,7 @@ It runs at **640×480 @8bpp**
 
 | Splash Screen  | Gameplay |
 | - | - |
-| ![image](https://github.com/harlock74/zeal-solitaire/blob/main/docs/screenshots/1.png) | ![image](https://github.com/harlock74/zeal-solitairfe/blob/main/docs/screenshots/2.png) |
+| ![image](https://github.com/harlock74/zeal-solitaire/blob/main/docs/screenshots/1.png) | ![image](https://github.com/harlock74/zeal-solitaire/blob/main/docs/screenshots/2.png) |
 
 ## Rules
 
