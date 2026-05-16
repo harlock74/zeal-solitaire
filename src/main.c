@@ -16,10 +16,8 @@
 #include "solitaire.h"
 #include "input.h"
 
-enum {
-    SCREEN_DISABLED = FLAG_OFF,
-    SCREEN_ENABLED = FLAG_ON,
-};
+#define SCREEN_DISABLED FLAG_OFF
+#define SCREEN_ENABLED FLAG_ON
 
 gfx_context vctx;
 uint8_t __at(G_BUF_ADDR) g_buf[SHARED_SCRATCH_BUF_SIZE];

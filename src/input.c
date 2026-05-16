@@ -4,12 +4,10 @@
 
 #include "input.h"
 
-enum {
-    EVENT_NOT_PRESSED = 0,
-    EVENT_PRESSED = 1,
-    INPUT_USE_CONTROLLER = 1,
-    INPUT_SNES_PORT_NONE = 0xFF,
-};
+#define EVENT_NOT_PRESSED 0
+#define EVENT_PRESSED 1
+#define INPUT_USE_CONTROLLER 1
+#define INPUT_SNES_PORT_NONE 0xFF
 
 static uint16_t previous_input;
 static uint16_t previous_mouse_buttons;

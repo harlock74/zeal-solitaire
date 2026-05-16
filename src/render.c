@@ -9,16 +9,14 @@
 #include "assets.h"
 #include "render.h"
 
-enum {
-    /*
-     * ZGDK's arena guard leaves one spare slot, so capacity is one larger
-     * than the two sprites registered below.
-     */
-    SPRITE_ARENA_CAPACITY = 3,
-    CURSOR_HOTSPOT_X = 9,
-    CURSOR_HOTSPOT_Y = 4,
-    TILE_PIXELS = 16,
-};
+/*
+ * ZGDK's arena guard leaves one spare slot, so capacity is one larger
+ * than the two sprites registered below.
+ */
+#define SPRITE_ARENA_CAPACITY 3
+#define CURSOR_HOTSPOT_X 9
+#define CURSOR_HOTSPOT_Y 4
+#define TILE_PIXELS 16
 
 static gfx_sprite sprite_arena[SPRITE_ARENA_CAPACITY];
 static gfx_sprite* cursor_sprite;

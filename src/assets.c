@@ -14,17 +14,13 @@ extern uint8_t _ztm_solitaire_end;
 #define CARD_COLOR_VARIANTS 2
 #define CARD_TILESET_VRAM_SCALE 2
 
-enum {
-    COLOR_RED = 0,
-    COLOR_BLACK = 1,
-};
+#define COLOR_RED 0
+#define COLOR_BLACK 1
 
-enum {
-    RANK_ACE = 0,
-    RANK_JACK = 10,
-    RANK_QUEEN = 11,
-    RANK_KING = 12,
-};
+#define RANK_ACE 0
+#define RANK_JACK 10
+#define RANK_QUEEN 11
+#define RANK_KING 12
 
 typedef struct {
     uint8_t top;
@@ -42,32 +38,28 @@ typedef struct {
     uint8_t bottom_right;
 } QueenFace;
 
-typedef enum {
-    TOP_LEFT = 0,
-    TOP_CENTRE,
-    TOP_RIGHT,
-    MIDDLE1_LEFT,
-    MIDDLE1_CENTRE,
-    MIDDLE1_RIGHT,
-    MIDDLE2_LEFT,
-    MIDDLE2_CENTRE,
-    MIDDLE2_RIGHT,
-    BOTTOM_LEFT,
-    BOTTOM_CENTRE,
-    BOTTOM_RIGHT,
-} CardPos;
+#define TOP_LEFT 0
+#define TOP_CENTRE 1
+#define TOP_RIGHT 2
+#define MIDDLE1_LEFT 3
+#define MIDDLE1_CENTRE 4
+#define MIDDLE1_RIGHT 5
+#define MIDDLE2_LEFT 6
+#define MIDDLE2_CENTRE 7
+#define MIDDLE2_RIGHT 8
+#define BOTTOM_LEFT 9
+#define BOTTOM_CENTRE 10
+#define BOTTOM_RIGHT 11
 
 #define PIPS(r0, r1, r2, r3) \
     ((uint16_t)((r0) | ((r1) << 3) | ((r2) << 6) | ((r3) << 9)))
 
 static const uint8_t kWhiteCardTile = 16;
 
-enum {
-    SUIT_MARKER_HEARTS = 11,
-    SUIT_MARKER_DIAMONDS = 12,
-    SUIT_MARKER_CLUBS = 27,
-    SUIT_MARKER_SPADES = 28,
-};
+#define SUIT_MARKER_HEARTS 11
+#define SUIT_MARKER_DIAMONDS 12
+#define SUIT_MARKER_CLUBS 27
+#define SUIT_MARKER_SPADES 28
 
 static const uint8_t kSuitTileBySuit[CARD_SUIT_COUNT] = {
     3,  /* Hearts */
@@ -196,7 +188,7 @@ static void init_card_grid(uint8_t grid[CARD_TILE_H][CARD_TILE_W], uint8_t tile)
     }
 }
 
-static void set_card_pos(uint8_t grid[CARD_TILE_H][CARD_TILE_W], CardPos pos, uint8_t tile)
+static void set_card_pos(uint8_t grid[CARD_TILE_H][CARD_TILE_W], uint8_t pos, uint8_t tile)
 {
     uint8_t row = (uint8_t)pos / CARD_TILE_W;
     uint8_t col = (uint8_t)pos % CARD_TILE_W;
