@@ -86,14 +86,12 @@ void input_poll_events(KeyEvents* ev)
     ev->down = (pressed_input & BUTTON_DOWN) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->left = (pressed_input & BUTTON_LEFT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->right = (pressed_input & BUTTON_RIGHT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
-    ev->a = (pressed_input & BUTTON_B) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
-    ev->undo = (pressed_input & BUTTON_A) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
+    ev->accept = ((pressed_input & BUTTON_B) || (pressed_mouse_buttons & MOUSE_LEFT)) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
+    ev->cancel = ((pressed_input & BUTTON_A) || (pressed_mouse_buttons & MOUSE_RIGHT)) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->start = (pressed_input & BUTTON_START) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->quit = (pressed_input & BUTTON_SELECT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->mouse_dx = 0;
     ev->mouse_dy = 0;
-    ev->mouse_left = (pressed_mouse_buttons & MOUSE_LEFT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
-    ev->mouse_right = (pressed_mouse_buttons & MOUSE_RIGHT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
 
     if (mouse_moved) {
         ev->mouse_dx = controller_get_mousex();

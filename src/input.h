@@ -12,14 +12,12 @@ typedef struct {
     uint8_t down;
     uint8_t left;
     uint8_t right;
-    uint8_t a;
-    uint8_t undo;
+    uint8_t accept;
+    uint8_t cancel;
     uint8_t start;
     uint8_t quit;
     int8_t mouse_dx;
     int8_t mouse_dy;
-    uint8_t mouse_left;
-    uint8_t mouse_right;
 } KeyEvents;
 
 zos_err_t input_events_init(void);

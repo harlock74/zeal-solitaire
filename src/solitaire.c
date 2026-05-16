@@ -951,7 +951,7 @@ void solitaire_handle_input(const KeyEvents* ev)
         }
     }
 
-    if (ev->undo || ev->mouse_right) {
+    if (ev->cancel) {
         if (undo_selection()) {
             redraw_hand_markers();
         } else {
@@ -959,7 +959,7 @@ void solitaire_handle_input(const KeyEvents* ev)
         }
     }
 
-    if (ev->a || ev->mouse_left) {
+    if (ev->accept) {
         old_x = current_hand_x();
         old_y = current_hand_y();
 
