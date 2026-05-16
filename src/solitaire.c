@@ -846,7 +846,7 @@ static uint8_t apply_mouse_motion(const KeyEvents* ev)
     uint8_t old_cursor_x = mouse_tile_cursor_x;
     uint8_t old_cursor_y = mouse_tile_cursor_y;
 
-    if (!ev->mouse_present || (ev->mouse_dx == 0 && ev->mouse_dy == 0)) {
+    if ((ev->mouse_dx == 0) && (ev->mouse_dy == 0)) {
         return FLAG_OFF;
     }
 

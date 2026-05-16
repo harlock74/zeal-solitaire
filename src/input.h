@@ -16,7 +16,6 @@ typedef struct {
     uint8_t undo;
     uint8_t start;
     uint8_t quit;
-    uint8_t mouse_present;
     int8_t mouse_dx;
     int8_t mouse_dy;
     uint8_t mouse_left;
