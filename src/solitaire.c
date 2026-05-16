@@ -24,6 +24,7 @@ enum {
     SELECTOR_COL_MIN = FLAG_OFF,
     MOUSE_ROW_SPLIT_Y = 4,
     MOUSE_Y_DIRECTION = 1,
+    NO_TABLEAU_DEPTH = U8_MAX_VALUE,
     SCREEN_PIXEL_W = 640,
     SCREEN_PIXEL_H = 480,
     TILE_PIXELS = 16,
@@ -77,6 +78,7 @@ static uint8_t game_won = FLAG_OFF;
 
 static void cancel_selection(void);
 static void clear_selected_marker(void);
+static uint8_t cursor_tile_y(void);
 static void draw_selected_marker(void);
 static uint8_t current_selector_x(void);
 static uint8_t current_selector_y(void);
@@ -536,6 +538,29 @@ static uint8_t first_face_up_depth(uint8_t col)
     return tableau_count[col];
 }
 
+static uint8_t tableau_depth_at_cursor(void)
+{
+    uint8_t tile_y = cursor_tile_y();
+    uint8_t relative_y;
+    uint8_t last_depth;
+    uint8_t depth;
+
+    if (selector_row != SELECTOR_ROW_TABLEAU ||
+        tableau_count[selector_col] == FLAG_OFF ||
+        tile_y < SOLITAIRE_TABLEAU_START_Y) {
+        return NO_TABLEAU_DEPTH;
+    }
+
+    relative_y = (uint8_t)(tile_y - SOLITAIRE_TABLEAU_START_Y);
+    last_depth = (uint8_t)(tableau_count[selector_col] - FLAG_ON);
+    if (relative_y > (uint8_t)(last_depth + CARD_TILE_H - 1U)) {
+        return NO_TABLEAU_DEPTH;
+    }
+
+    depth = (relative_y > last_depth) ? last_depth : relative_y;
+    return (tableau[selector_col][depth].face_up == CARD_FACE_UP) ? depth : NO_TABLEAU_DEPTH;
+}
+
 static uint8_t expand_or_cancel_tableau_selection(void)
 {
     uint8_t first_depth = first_face_up_depth(selector_col);
@@ -587,7 +612,45 @@ static uint8_t handle_tableau_selection(void)
     return FLAG_ON;
 }
 
-static uint8_t handle_select_action(void)
+static uint8_t handle_mouse_tableau_selection(void)
+{
+    uint8_t depth;
+    uint8_t count;
+    uint8_t card;
+
+    if (selected_active) {
+        if (selected_row == SELECTOR_ROW_TABLEAU && selected_col == selector_col) {
+            depth = tableau_depth_at_cursor();
+            if (depth == NO_TABLEAU_DEPTH) {
+                return FLAG_OFF;
+            }
+
+            if (selection_matches(SELECTOR_ROW_TABLEAU, selector_col, depth)) {
+                cancel_selection();
+                return FLAG_ON;
+            }
+
+            count = (uint8_t)(tableau_count[selector_col] - depth);
+            card = tableau[selector_col][depth].card;
+            select_card(SELECTOR_ROW_TABLEAU, selector_col, depth, count, card);
+            return FLAG_ON;
+        }
+
+        return move_selected_to_tableau(selector_col);
+    }
+
+    depth = tableau_depth_at_cursor();
+    if (depth == NO_TABLEAU_DEPTH) {
+        return FLAG_OFF;
+    }
+
+    count = (uint8_t)(tableau_count[selector_col] - depth);
+    card = tableau[selector_col][depth].card;
+    select_card(SELECTOR_ROW_TABLEAU, selector_col, depth, count, card);
+    return FLAG_ON;
+}
+
+static uint8_t handle_select_action(uint8_t mouse_accept)
 {
     if (selector_row == SELECTOR_ROW_TOP) {
         if (selector_col == TOP_PILE_STOCK) {
@@ -600,7 +663,7 @@ static uint8_t handle_select_action(void)
         return FLAG_OFF;
     }
 
-    return handle_tableau_selection();
+    return mouse_accept ? handle_mouse_tableau_selection() : handle_tableau_selection();
 }
 
 static void render_opening_tableau(void)
@@ -925,7 +988,10 @@ void solitaire_handle_input(const KeyEvents* ev)
     }
 
     if (ev->cancel) {
-        if (undo_selection()) {
+        if (ev->mouse_cancel && selected_active) {
+            cancel_selection();
+            redraw_hand_markers();
+        } else if (undo_selection()) {
             redraw_hand_markers();
         } else {
             show_invalid_move_feedback();
@@ -933,7 +999,7 @@ void solitaire_handle_input(const KeyEvents* ev)
     }
 
     if (ev->accept) {
-        if (!handle_select_action()) {
+        if (!handle_select_action(ev->mouse_accept)) {
             show_invalid_move_feedback();
         }
 

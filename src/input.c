@@ -85,8 +85,10 @@ void input_poll_events(KeyEvents* ev)
     ev->down = (pressed_input & BUTTON_DOWN) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->left = (pressed_input & BUTTON_LEFT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->right = (pressed_input & BUTTON_RIGHT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
-    ev->accept = ((pressed_input & BUTTON_B) || (pressed_mouse_buttons & MOUSE_LEFT)) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
-    ev->cancel = ((pressed_input & BUTTON_A) || (pressed_mouse_buttons & MOUSE_RIGHT)) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
+    ev->mouse_accept = (pressed_mouse_buttons & MOUSE_LEFT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
+    ev->accept = ((pressed_input & BUTTON_B) || ev->mouse_accept) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
+    ev->mouse_cancel = (pressed_mouse_buttons & MOUSE_RIGHT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
+    ev->cancel = ((pressed_input & BUTTON_A) || ev->mouse_cancel) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->start = (pressed_input & BUTTON_START) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->quit = (pressed_input & BUTTON_SELECT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->mouse_dx = 0;

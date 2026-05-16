@@ -25,10 +25,10 @@ gfx_context vctx;
 uint8_t __at(G_BUF_ADDR) g_buf[SHARED_SCRATCH_BUF_SIZE];
 uint8_t g_running = FLAG_ON;
 
-static void print_error_u16(const char* prefix, uint16_t value)
+static void print_error(const char* prefix, uint16_t value)
 {
     put_s(prefix);
-    put_u16(value);
+    put_u8(value);
     put_c('\n');
 }
 
@@ -54,7 +54,7 @@ void init(void)
      */
     err = input_events_init();
     if (err != ERR_SUCCESS) {
-        print_error_u16("Input init failed: ", err);
+        print_error("Input init failed: ", err);
         exit(1);
     }
 
@@ -62,26 +62,26 @@ void init(void)
 
     err = gfx_initialize(ZVB_CTRL_VID_MODE_GFX_640_8BIT, &vctx);
     if (err != ERR_SUCCESS) {
-        print_error_u16("GFX init failed: ", err);
+        print_error("GFX init failed: ", err);
         exit(1);
     }
 
     err = load_cards_palette(&vctx);
     if (err != GFX_SUCCESS) {
-        print_error_u16("Palette load failed: ", err);
+        print_error("Palette load failed: ", err);
         exit(1);
     }
 
     err = load_cards_tileset(&vctx);
     if (err != GFX_SUCCESS) {
-        print_error_u16("Tileset load failed: ", err);
+        print_error("Tileset load failed: ", err);
         exit(1);
     }
     load_ui_font_tiles();
 
     err = render_init_sprites();
     if (err != GFX_SUCCESS) {
-        print_error_u16("Sprite init failed: ", err);
+        print_error("Sprite init failed: ", err);
         exit(1);
     }
 
