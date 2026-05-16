@@ -22,9 +22,12 @@ enum {
     INVALID_MOVE_BLINKS = 2,
     INVALID_MOVE_BLINK_FRAMES = 4,
     SELECTOR_COL_MIN = FLAG_OFF,
-    MOUSE_TILE_UNITS = 8,
     MOUSE_ROW_SPLIT_Y = 4,
     MOUSE_Y_DIRECTION = 1,
+    SCREEN_PIXEL_W = 640,
+    SCREEN_PIXEL_H = 480,
+    TILE_PIXELS = 16,
+    TILE_CENTER_OFFSET = 8,
     WIN_MESSAGE_Y = 14,
     WIN_RESTART_Y = 15,
 };
@@ -68,18 +71,13 @@ static uint8_t waste_count = FLAG_OFF;
 static uint8_t foundation_count[SOLITAIRE_FOUNDATION_PILES] = {FLAG_OFF, FLAG_OFF, FLAG_OFF, FLAG_OFF};
 static uint8_t foundation_suit[SOLITAIRE_FOUNDATION_PILES] = {U8_MAX_VALUE, U8_MAX_VALUE, U8_MAX_VALUE, U8_MAX_VALUE};
 static uint8_t scratch_card_grid[CARD_TILE_H][CARD_TILE_W];
-static int16_t mouse_cursor_units_x = 0;
-static int16_t mouse_cursor_units_y = 0;
-static uint8_t mouse_tile_cursor_active = FLAG_OFF;
-static uint8_t mouse_tile_cursor_x = 0;
-static uint8_t mouse_tile_cursor_y = 0;
+static uint16_t cursor_hotspot_x = 0;
+static uint16_t cursor_hotspot_y = 0;
 static uint8_t game_won = FLAG_OFF;
 
 static void cancel_selection(void);
 static void clear_selected_marker(void);
 static void draw_selected_marker(void);
-static uint8_t current_hand_x(void);
-static uint8_t current_hand_y(void);
 static uint8_t current_selector_x(void);
 static uint8_t current_selector_y(void);
 static void redraw_hand_markers(void);
@@ -307,6 +305,7 @@ static void render_win_message(void)
 {
     clear_selected_marker();
     selected_active = FLAG_OFF;
+    render_set_cursor_visible(FLAG_OFF);
     render_clear_ui_layer();
     render_draw_text_centered(WIN_MESSAGE_Y, "WELL DONE!");
     render_draw_text_centered(WIN_RESTART_Y, "PRESS ENTER TO PLAY AGAIN");
@@ -324,12 +323,10 @@ static void wait_frames(uint8_t frames)
 
 static void show_invalid_move_feedback(void)
 {
-    uint8_t x = current_selector_x();
-    uint8_t y = current_selector_y();
-
     for (uint8_t i = 0; i < INVALID_MOVE_BLINKS; i++) {
-        render_clear_hand_selector(x, y);
+        render_set_cursor_visible(FLAG_OFF);
         wait_frames(INVALID_MOVE_BLINK_FRAMES);
+        render_set_cursor_visible(FLAG_ON);
         redraw_hand_markers();
         wait_frames(INVALID_MOVE_BLINK_FRAMES);
     }
@@ -672,33 +669,57 @@ static uint8_t selected_marker_y(void)
     return tableau_selected_marker_y();
 }
 
-static uint8_t current_hand_x(void)
+static uint16_t tile_center_pixel(uint8_t tile)
 {
-    return mouse_tile_cursor_active ? mouse_tile_cursor_x : current_selector_x();
+    return (uint16_t)(((uint16_t)tile * TILE_PIXELS) + TILE_CENTER_OFFSET);
 }
 
-static uint8_t current_hand_y(void)
+static uint8_t cursor_tile_x(void)
 {
-    return mouse_tile_cursor_active ? mouse_tile_cursor_y : current_selector_y();
+    return (uint8_t)(cursor_hotspot_x / TILE_PIXELS);
+}
+
+static uint8_t cursor_tile_y(void)
+{
+    return (uint8_t)(cursor_hotspot_y / TILE_PIXELS);
+}
+
+static uint16_t clamp_cursor_pixel(int16_t value, uint16_t max_value)
+{
+    if (value < 0) {
+        return 0;
+    }
+    if ((uint16_t)value > max_value) {
+        return max_value;
+    }
+    return (uint16_t)value;
+}
+
+static void sync_cursor_to_selector(void)
+{
+    cursor_hotspot_x = tile_center_pixel(current_selector_x());
+    cursor_hotspot_y = tile_center_pixel(current_selector_y());
+    render_set_cursor_pixel(cursor_hotspot_x, cursor_hotspot_y);
 }
 
 static void draw_selected_marker(void)
 {
     if (selected_active) {
-        render_draw_closed_hand_selector(selected_marker_x(), selected_marker_y());
+        render_set_selected_marker_tile(selected_marker_x(), selected_marker_y(), FLAG_ON);
     }
 }
 
 static void redraw_hand_markers(void)
 {
-    render_draw_hand_selector(current_hand_x(), current_hand_y());
+    render_set_cursor_pixel(cursor_hotspot_x, cursor_hotspot_y);
+    render_set_cursor_visible(FLAG_ON);
     draw_selected_marker();
 }
 
 static void clear_selected_marker(void)
 {
     if (selected_active) {
-        render_clear_hand_selector(selected_marker_x(), selected_marker_y());
+        render_set_selected_marker_tile(0, 0, FLAG_OFF);
     }
 }
 
@@ -811,67 +832,34 @@ static void move_selector_vertical(void)
     selector_col = nearest_col_in_row(selector_row, old_x);
 }
 
-static int16_t clamp_mouse_units(int16_t value, uint8_t max_tile)
-{
-    int16_t max_value = (int16_t)max_tile * MOUSE_TILE_UNITS;
-
-    if (value < 0) {
-        return 0;
-    }
-    if (value > max_value) {
-        return max_value;
-    }
-    return value;
-}
-
-static uint8_t mouse_units_to_tile(int16_t value)
-{
-    return (uint8_t)((value + (MOUSE_TILE_UNITS / 2)) / MOUSE_TILE_UNITS);
-}
-
-static void sync_mouse_cursor_to_selector(void)
-{
-    mouse_cursor_units_x = (int16_t)current_selector_x() * MOUSE_TILE_UNITS;
-    mouse_cursor_units_y = (int16_t)current_selector_y() * MOUSE_TILE_UNITS;
-    mouse_tile_cursor_x = current_selector_x();
-    mouse_tile_cursor_y = current_selector_y();
-}
-
 static uint8_t apply_mouse_motion(const KeyEvents* ev)
 {
     uint8_t mouse_tile_x;
     uint8_t mouse_tile_y;
     uint8_t old_row = selector_row;
     uint8_t old_col = selector_col;
-    uint8_t old_cursor_x = mouse_tile_cursor_x;
-    uint8_t old_cursor_y = mouse_tile_cursor_y;
 
     if ((ev->mouse_dx == 0) && (ev->mouse_dy == 0)) {
         return FLAG_OFF;
     }
 
-    mouse_cursor_units_x = clamp_mouse_units(
-        (int16_t)(mouse_cursor_units_x + ev->mouse_dx),
-        (uint8_t)(SCREEN_TILE_W - 1U));
-    mouse_cursor_units_y = clamp_mouse_units(
-        (int16_t)(mouse_cursor_units_y + (ev->mouse_dy * MOUSE_Y_DIRECTION)),
-        (uint8_t)(SCREEN_TILE_H - 1U));
+    cursor_hotspot_x = clamp_cursor_pixel(
+        (int16_t)cursor_hotspot_x + ev->mouse_dx,
+        (uint16_t)(SCREEN_PIXEL_W - 1U));
+    cursor_hotspot_y = clamp_cursor_pixel(
+        (int16_t)cursor_hotspot_y + (ev->mouse_dy * MOUSE_Y_DIRECTION),
+        (uint16_t)(SCREEN_PIXEL_H - 1U));
+    render_set_cursor_pixel(cursor_hotspot_x, cursor_hotspot_y);
 
-    mouse_tile_x = mouse_units_to_tile(mouse_cursor_units_x);
-    mouse_tile_y = mouse_units_to_tile(mouse_cursor_units_y);
-    mouse_tile_cursor_active = FLAG_ON;
-    mouse_tile_cursor_x = mouse_tile_x;
-    mouse_tile_cursor_y = mouse_tile_y;
+    mouse_tile_x = cursor_tile_x();
+    mouse_tile_y = cursor_tile_y();
 
     selector_row = (mouse_tile_y < MOUSE_ROW_SPLIT_Y) ?
         SELECTOR_ROW_TOP :
         SELECTOR_ROW_TABLEAU;
     selector_col = nearest_col_in_row(selector_row, mouse_tile_x);
 
-    return (old_row != selector_row ||
-        old_col != selector_col ||
-        old_cursor_x != mouse_tile_cursor_x ||
-        old_cursor_y != mouse_tile_cursor_y) ? FLAG_ON : FLAG_OFF;
+    return (old_row != selector_row || old_col != selector_col) ? FLAG_ON : FLAG_OFF;
 }
 
 void solitaire_init_game(void)
@@ -893,25 +881,17 @@ static void restart_game(void)
 
 void solitaire_init_controls(void)
 {
-    uint8_t x;
-    uint8_t y;
-
     selector_row = SELECTOR_ROW_TOP;
     selector_col = SELECTOR_COL_MIN;
-    mouse_tile_cursor_active = FLAG_OFF;
+    selected_active = FLAG_OFF;
 
-    x = current_selector_x();
-    y = current_selector_y();
-    render_draw_hand_selector(x, y);
-    sync_mouse_cursor_to_selector();
+    render_set_selected_marker_tile(0, 0, FLAG_OFF);
+    render_set_cursor_visible(FLAG_ON);
+    sync_cursor_to_selector();
 }
 
 void solitaire_handle_input(const KeyEvents* ev)
 {
-    uint8_t old_x = current_hand_x();
-    uint8_t old_y = current_hand_y();
-    uint8_t new_x;
-    uint8_t new_y;
     uint8_t moved = FLAG_OFF;
 
     if (game_won) {
@@ -922,33 +902,26 @@ void solitaire_handle_input(const KeyEvents* ev)
     }
 
     if (ev->left) {
-        mouse_tile_cursor_active = FLAG_OFF;
         move_selector_left();
         moved = FLAG_ON;
     }
     if (ev->right) {
-        mouse_tile_cursor_active = FLAG_OFF;
         move_selector_right();
         moved = FLAG_ON;
     }
     if (ev->up || ev->down) {
-        mouse_tile_cursor_active = FLAG_OFF;
         move_selector_vertical();
         moved = FLAG_ON;
+    }
+    if (moved) {
+        sync_cursor_to_selector();
     }
     if (apply_mouse_motion(ev)) {
         moved = FLAG_ON;
     }
 
-    new_x = current_hand_x();
-    new_y = current_hand_y();
-
-    if (moved && (old_x != new_x || old_y != new_y)) {
-        render_clear_hand_selector(old_x, old_y);
+    if (moved) {
         redraw_hand_markers();
-        if (!mouse_tile_cursor_active) {
-            sync_mouse_cursor_to_selector();
-        }
     }
 
     if (ev->cancel) {
@@ -960,9 +933,6 @@ void solitaire_handle_input(const KeyEvents* ev)
     }
 
     if (ev->accept) {
-        old_x = current_hand_x();
-        old_y = current_hand_y();
-
         if (!handle_select_action()) {
             show_invalid_move_feedback();
         }
@@ -971,15 +941,6 @@ void solitaire_handle_input(const KeyEvents* ev)
             return;
         }
 
-        new_x = current_hand_x();
-        new_y = current_hand_y();
-        if (old_x != new_x || old_y != new_y) {
-            render_clear_hand_selector(old_x, old_y);
-        }
-
         redraw_hand_markers();
-        if (!mouse_tile_cursor_active) {
-            sync_mouse_cursor_to_selector();
-        }
     }
 }

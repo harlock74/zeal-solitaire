@@ -11,7 +11,10 @@
 
 /* Runtime transparent tile injected by load_cards_tileset(). */
 #define EMPTY_TILE 255
-#define SHARED_SCRATCH_BUF_SIZE 1024
+#define SHARED_SCRATCH_BUF_SIZE 4096
+/* Keep syscall scratch buffer inside one 16KB virtual page. */
+#define G_BUF_ADDR 0xA000
+
 /* Tiled tile IDs requested for the moving hand and picked-up-card marker. */
 #define HAND_SELECTOR_TILE 79
 #define HAND_CLOSED_SELECTOR_TILE 125

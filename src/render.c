@@ -1,6 +1,7 @@
 #include <stdint.h>
 
 #include <zvb_gfx.h>
+#include <zvb_sprite.h>
 #include <zgdk.h>
 
 #include "main.h"
@@ -8,9 +9,39 @@
 #include "assets.h"
 #include "render.h"
 
+enum {
+    /*
+     * ZGDK's arena guard leaves one spare slot, so capacity is one larger
+     * than the two sprites registered below.
+     */
+    SPRITE_ARENA_CAPACITY = 3,
+    CURSOR_HOTSPOT_X = 9,
+    CURSOR_HOTSPOT_Y = 4,
+    TILE_PIXELS = 16,
+};
+
+static gfx_sprite sprite_arena[SPRITE_ARENA_CAPACITY];
+static gfx_sprite* cursor_sprite;
+static gfx_sprite* selected_marker_sprite;
+
 static uint8_t tile_coord_visible(uint8_t x, uint8_t y)
 {
     return (x < SCREEN_TILE_W && y < SCREEN_TILE_H) ? FLAG_ON : FLAG_OFF;
+}
+
+static uint16_t sprite_x_from_hotspot(uint16_t hotspot_x)
+{
+    return (uint16_t)(hotspot_x + TILE_PIXELS - CURSOR_HOTSPOT_X);
+}
+
+static uint16_t sprite_y_from_hotspot(uint16_t hotspot_y)
+{
+    return (uint16_t)(hotspot_y + TILE_PIXELS - CURSOR_HOTSPOT_Y);
+}
+
+static uint16_t sprite_pos_from_tile(uint8_t tile)
+{
+    return (uint16_t)(((uint16_t)tile * TILE_PIXELS) + TILE_PIXELS);
 }
 
 void render_table(void)
@@ -95,40 +126,67 @@ void render_draw_text_centered(uint8_t y, const char* text)
     render_draw_text((len < SCREEN_TILE_W) ? (uint8_t)((SCREEN_TILE_W - len) / 2U) : 0, y, text);
 }
 
-void render_draw_hand_selector(uint8_t x, uint8_t y)
+gfx_error render_init_sprites(void)
 {
-    if (!tile_coord_visible(x, y)) {
-        return;
+    gfx_sprite cursor = {
+        .y = 16,
+        .x = 16,
+        .tile = EMPTY_TILE,
+        .flags = SPRITE_NONE,
+        .options = SPRITE_OPTION_NONE,
+    };
+    gfx_sprite selected_marker = {
+        .y = 16,
+        .x = 16,
+        .tile = EMPTY_TILE,
+        .flags = SPRITE_NONE,
+        .options = SPRITE_OPTION_NONE,
+    };
+
+    if (sprites_register_arena(sprite_arena, SPRITE_ARENA_CAPACITY) != GFX_SUCCESS) {
+        return GFX_FAILURE;
     }
 
-    /*
-     * Hand selector is drawn on UI layer so it can move independently
-     * from static background cards/slots.
-     */
-    gfx_tilemap_place(&vctx, HAND_SELECTOR_TILE, LAYER_UI, x, y);
+    cursor_sprite = sprites_register(cursor);
+    selected_marker_sprite = sprites_register(selected_marker);
+    if (cursor_sprite == NULL || selected_marker_sprite == NULL) {
+        return GFX_FAILURE;
+    }
+
+    return GFX_SUCCESS;
 }
 
-void render_draw_closed_hand_selector(uint8_t x, uint8_t y)
+void render_set_cursor_pixel(uint16_t hotspot_x, uint16_t hotspot_y)
 {
-    if (!tile_coord_visible(x, y)) {
+    if (cursor_sprite == NULL) {
         return;
     }
 
-    /*
-     * The closed hand marks the source card/run currently picked up,
-     * while the normal hand remains free to show the live cursor.
-     */
-    gfx_tilemap_place(&vctx, HAND_CLOSED_SELECTOR_TILE, LAYER_UI, x, y);
+    cursor_sprite->x = sprite_x_from_hotspot(hotspot_x);
+    cursor_sprite->y = sprite_y_from_hotspot(hotspot_y);
 }
 
-void render_clear_hand_selector(uint8_t x, uint8_t y)
+void render_set_cursor_visible(uint8_t visible)
 {
-    if (!tile_coord_visible(x, y)) {
+    if (cursor_sprite == NULL) {
         return;
     }
 
-    /*
-     * Clear just the previous selector tile position on the UI layer.
-     */
-    gfx_tilemap_place(&vctx, EMPTY_TILE, LAYER_UI, x, y);
+    cursor_sprite->tile = visible ? HAND_SELECTOR_TILE : EMPTY_TILE;
+}
+
+void render_set_selected_marker_tile(uint8_t tile_x, uint8_t tile_y, uint8_t visible)
+{
+    if (selected_marker_sprite == NULL) {
+        return;
+    }
+
+    selected_marker_sprite->tile = visible ? HAND_CLOSED_SELECTOR_TILE : EMPTY_TILE;
+    selected_marker_sprite->x = sprite_pos_from_tile(tile_x);
+    selected_marker_sprite->y = sprite_pos_from_tile(tile_y);
+}
+
+void render_draw_sprites(void)
+{
+    sprites_render(&vctx);
 }

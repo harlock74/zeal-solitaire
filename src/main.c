@@ -22,7 +22,7 @@ enum {
 };
 
 gfx_context vctx;
-uint8_t g_buf[SHARED_SCRATCH_BUF_SIZE];
+uint8_t __at(G_BUF_ADDR) g_buf[SHARED_SCRATCH_BUF_SIZE];
 uint8_t g_running = FLAG_ON;
 
 static void print_error_u16(const char* prefix, uint16_t value)
@@ -79,6 +79,12 @@ void init(void)
     }
     load_ui_font_tiles();
 
+    err = render_init_sprites();
+    if (err != GFX_SUCCESS) {
+        print_error_u16("Sprite init failed: ", err);
+        exit(1);
+    }
+
     audio_init();
     splash_run_placeholder();
 
@@ -110,7 +116,7 @@ void update(void)
 
 void draw(void)
 {
-    /* Milestone 1 is static: no per-frame rendering changes yet. */
+    render_draw_sprites();
 }
 
 int main(void)
