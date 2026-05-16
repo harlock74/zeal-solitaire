@@ -69,14 +69,17 @@ void input_poll_events(KeyEvents* ev)
      * arrows/D-pad move, keyboard Space/Z maps to SNES B,
      * and keyboard X maps to SNES A for selection undo.
      */
-    uint16_t current_input = read_button_input();
-    uint16_t pressed_input = (current_input & ~previous_input);
+    // uint16_t current_input = read_button_input();
+    uint16_t pressed_input = (read_button_input() & ~previous_input);
     uint16_t current_mouse_buttons = read_mouse_buttons();
     uint16_t pressed_mouse_buttons = (current_mouse_buttons & ~previous_mouse_buttons);
-    uint8_t mouse_moved = 0;
 
-    if (mouse_port != INPUT_SNES_PORT_NONE) {
-        mouse_moved = controller_read_mouse(mouse_port);
+    if (mouse_port != INPUT_SNES_PORT_NONE && controller_read_mouse(mouse_port)) {
+        ev->mouse_dx = controller_get_mousex();
+        ev->mouse_dy = controller_get_mousey();
+    } else {
+        ev->mouse_dx = 0;
+        ev->mouse_dy = 0;
     }
 
     ev->up = (pressed_input & BUTTON_UP) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
@@ -89,13 +92,6 @@ void input_poll_events(KeyEvents* ev)
     ev->cancel = ((pressed_input & BUTTON_A) || ev->mouse_cancel) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->start = (pressed_input & BUTTON_START) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->quit = (pressed_input & BUTTON_SELECT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
-    ev->mouse_dx = 0;
-    ev->mouse_dy = 0;
-
-    if (mouse_moved) {
-        ev->mouse_dx = controller_get_mousex();
-        ev->mouse_dy = controller_get_mousey();
-    }
 
     previous_input = current_input;
     previous_mouse_buttons = current_mouse_buttons;
