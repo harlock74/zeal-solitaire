@@ -14,22 +14,26 @@ static uint16_t previous_mouse_buttons;
 static uint8_t pad_port;
 static uint8_t mouse_port;
 
-static uint16_t read_button_input(void)
+static uint16_t read_controller_input(void)
 {
     uint16_t input = keyboard_read();
-    if(pad_port != INPUT_SNES_PORT_NONE) {
-        input |= controller_read_port(pad_port);
+
+    if (pad_port != INPUT_SNES_PORT_NONE || mouse_port != INPUT_SNES_PORT_NONE) {
+        controller_read_port(SNES_PORT1);
+    }
+    if (pad_port != INPUT_SNES_PORT_NONE) {
+        input |= controller_get(pad_port);
     }
     return input;
 }
 
-static uint16_t read_mouse_buttons(void)
+static uint16_t get_mouse_buttons(void)
 {
     if (mouse_port == INPUT_SNES_PORT_NONE) {
         return 0;
     }
 
-    return controller_read_port(mouse_port);
+    return controller_get(mouse_port);
 }
 
 zos_err_t input_events_init(void)
@@ -54,10 +58,14 @@ zos_err_t input_events_init(void)
 
     if (mouse_port != INPUT_SNES_PORT_NONE) {
         controller_set_mouse_sensitivity(mouse_port, MOUSE_HIGH);
+        controller_set_mouse_sensitivity(mouse_port, MOUSE_MEDIUM);
     }
 
-    previous_input = read_button_input();
-    previous_mouse_buttons = read_mouse_buttons();
+    previous_input = read_controller_input();
+    if (mouse_port != INPUT_SNES_PORT_NONE) {
+        controller_read_mouse(mouse_port);
+    }
+    previous_mouse_buttons = get_mouse_buttons();
     return ERR_SUCCESS;
 }
 
@@ -68,11 +76,11 @@ void input_poll_events(KeyEvents* ev)
      * arrows/D-pad move, keyboard Space/Z maps to SNES B,
      * and keyboard X maps to SNES A for selection undo.
      */
-    uint16_t current_input = read_button_input();
+    uint16_t current_input = read_controller_input();
     uint16_t pressed_input = (current_input & ~previous_input);
-    uint16_t current_mouse_buttons = read_mouse_buttons();
-    uint16_t pressed_mouse_buttons = (current_mouse_buttons & ~previous_mouse_buttons);
-    uint16_t released_mouse_buttons = (previous_mouse_buttons & ~current_mouse_buttons);
+    uint16_t current_mouse_buttons;
+    uint16_t pressed_mouse_buttons;
+    uint16_t released_mouse_buttons;
 
     if (mouse_port != INPUT_SNES_PORT_NONE && controller_read_mouse(mouse_port)) {
         ev->mouse_dx = controller_get_mousex();
@@ -81,6 +89,10 @@ void input_poll_events(KeyEvents* ev)
         ev->mouse_dx = 0;
         ev->mouse_dy = 0;
     }
+
+    current_mouse_buttons = get_mouse_buttons();
+    pressed_mouse_buttons = (current_mouse_buttons & ~previous_mouse_buttons);
+    released_mouse_buttons = (previous_mouse_buttons & ~current_mouse_buttons);
 
     ev->up = (pressed_input & BUTTON_UP) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->down = (pressed_input & BUTTON_DOWN) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
