@@ -52,10 +52,10 @@ zos_err_t input_events_init(void)
         mouse_port = SNES_PORT2;
     }
 
-    if (mouse_port != INPUT_SNES_PORT_NONE) {
-        controller_set_mouse_sensitivity(mouse_port, MOUSE_MEDIUM);
-        controller_set_mouse_sensitivity(mouse_port, MOUSE_MEDIUM);
-    }
+    // if (mouse_port != INPUT_SNES_PORT_NONE) {
+    //     controller_set_mouse_sensitivity(mouse_port, MOUSE_MEDIUM);
+    //     controller_set_mouse_sensitivity(mouse_port, MOUSE_MEDIUM);
+    // }
 
     previous_input = read_button_input();
     previous_mouse_buttons = read_mouse_buttons();
