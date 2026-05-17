@@ -69,8 +69,8 @@ void input_poll_events(KeyEvents* ev)
      * arrows/D-pad move, keyboard Space/Z maps to SNES B,
      * and keyboard X maps to SNES A for selection undo.
      */
-    // uint16_t current_input = read_button_input();
-    uint16_t pressed_input = (read_button_input() & ~previous_input);
+    uint16_t current_input = read_button_input();
+    uint16_t pressed_input = (current_input & ~previous_input);
     uint16_t current_mouse_buttons = read_mouse_buttons();
     uint16_t pressed_mouse_buttons = (current_mouse_buttons & ~previous_mouse_buttons);
 
