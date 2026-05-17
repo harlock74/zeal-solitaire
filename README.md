@@ -24,6 +24,8 @@ Based on the classic klondike solitaire game.
 - `X` (or SNES `A` or or mouse right click): undo previous card selection
 - `RIGHT_SHIFT` (or SNES `SELECT`): quit
 
+If using the native-emulator and not real hardware, click on the mouse middle button to hide the host mouse cursor.
+
 ## Assets
 
 The main larger cards were made by me. Feel free to create your own cards by editing the provided `cards.aseprite`. All you need to do is change the tiles used for each suit pip. You can also be creative with the Jack, Queen, and King tiles. Have fun if you find my cards boring at some point.
