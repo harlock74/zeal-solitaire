@@ -10,10 +10,11 @@
 #include "render.h"
 
 /*
- * ZGDK's arena guard leaves one spare slot, so capacity is one larger
- * than the two sprites registered below.
+ * ZGDK's arena guard leaves one spare slot. A dragged king run uses 12
+ * covered rows plus one full 3x4 card: 16 rows * 3 sprites.
  */
-#define SPRITE_ARENA_CAPACITY 3
+#define DRAG_STACK_SPRITES (CARD_STACK_SPRITE_MAX_ROWS * CARD_TILE_W)
+#define SPRITE_ARENA_CAPACITY (2 + DRAG_STACK_SPRITES + 1)
 #define CURSOR_HOTSPOT_X 9
 #define CURSOR_HOTSPOT_Y 4
 #define TILE_PIXELS 16
@@ -21,6 +22,8 @@
 static gfx_sprite sprite_arena[SPRITE_ARENA_CAPACITY];
 static gfx_sprite* cursor_sprite;
 static gfx_sprite* selected_marker_sprite;
+static gfx_sprite* drag_stack_sprites[DRAG_STACK_SPRITES];
+static uint8_t drag_stack_sprite_count;
 
 static uint8_t tile_coord_visible(uint8_t x, uint8_t y)
 {
@@ -126,14 +129,7 @@ void render_draw_text_centered(uint8_t y, const char* text)
 
 gfx_error render_init_sprites(void)
 {
-    gfx_sprite cursor = {
-        .y = 16,
-        .x = 16,
-        .tile = EMPTY_TILE,
-        .flags = SPRITE_NONE,
-        .options = SPRITE_OPTION_NONE,
-    };
-    gfx_sprite selected_marker = {
+    gfx_sprite sprite = {
         .y = 16,
         .x = 16,
         .tile = EMPTY_TILE,
@@ -145,10 +141,17 @@ gfx_error render_init_sprites(void)
         return GFX_FAILURE;
     }
 
-    cursor_sprite = sprites_register(cursor);
-    selected_marker_sprite = sprites_register(selected_marker);
+    cursor_sprite = sprites_register(sprite);
+    selected_marker_sprite = sprites_register(sprite);
     if (cursor_sprite == NULL || selected_marker_sprite == NULL) {
         return GFX_FAILURE;
+    }
+
+    for (uint8_t i = 0; i < DRAG_STACK_SPRITES; i++) {
+        drag_stack_sprites[i] = sprites_register(sprite);
+        if (drag_stack_sprites[i] == NULL) {
+            return GFX_FAILURE;
+        }
     }
 
     return GFX_SUCCESS;
@@ -182,6 +185,51 @@ void render_set_selected_marker_tile(uint8_t tile_x, uint8_t tile_y, uint8_t vis
     selected_marker_sprite->tile = visible ? HAND_CLOSED_SELECTOR_TILE : EMPTY_TILE;
     selected_marker_sprite->x = sprite_pos_from_tile(tile_x);
     selected_marker_sprite->y = sprite_pos_from_tile(tile_y);
+}
+
+void render_set_drag_stack(
+    uint16_t pixel_x,
+    uint16_t pixel_y,
+    uint8_t rows,
+    const uint8_t grid[CARD_STACK_SPRITE_MAX_ROWS][CARD_TILE_W])
+{
+    uint8_t sprite_index = 0;
+
+    drag_stack_sprite_count = (uint8_t)(rows * CARD_TILE_W);
+    for (uint8_t row = 0; row < rows; row++) {
+        for (uint8_t col = 0; col < CARD_TILE_W; col++) {
+            gfx_sprite* sprite = drag_stack_sprites[sprite_index];
+
+            sprite->tile = grid[row][col];
+            sprite->x = (uint16_t)(pixel_x + ((uint16_t)col * TILE_PIXELS) + TILE_PIXELS);
+            sprite->y = (uint16_t)(pixel_y + ((uint16_t)row * TILE_PIXELS) + TILE_PIXELS);
+            sprite_index++;
+        }
+    }
+}
+
+void render_move_drag_stack(uint16_t pixel_x, uint16_t pixel_y)
+{
+    uint8_t sprite_index = 0;
+    uint8_t rows = (uint8_t)(drag_stack_sprite_count / CARD_TILE_W);
+
+    for (uint8_t row = 0; row < rows; row++) {
+        for (uint8_t col = 0; col < CARD_TILE_W; col++) {
+            gfx_sprite* sprite = drag_stack_sprites[sprite_index];
+
+            sprite->x = (uint16_t)(pixel_x + ((uint16_t)col * TILE_PIXELS) + TILE_PIXELS);
+            sprite->y = (uint16_t)(pixel_y + ((uint16_t)row * TILE_PIXELS) + TILE_PIXELS);
+            sprite_index++;
+        }
+    }
+}
+
+void render_clear_drag_stack(void)
+{
+    for (uint8_t i = 0; i < drag_stack_sprite_count; i++) {
+        drag_stack_sprites[i]->tile = EMPTY_TILE;
+    }
+    drag_stack_sprite_count = FLAG_OFF;
 }
 
 void render_draw_sprites(void)

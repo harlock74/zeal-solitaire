@@ -70,8 +70,12 @@ static uint8_t waste_count = FLAG_OFF;
 static uint8_t foundation_count[SOLITAIRE_FOUNDATION_PILES] = {FLAG_OFF, FLAG_OFF, FLAG_OFF, FLAG_OFF};
 static uint8_t foundation_suit[SOLITAIRE_FOUNDATION_PILES] = {U8_MAX_VALUE, U8_MAX_VALUE, U8_MAX_VALUE, U8_MAX_VALUE};
 static uint8_t scratch_card_grid[CARD_TILE_H][CARD_TILE_W];
+static uint8_t drag_stack_grid[CARD_STACK_SPRITE_MAX_ROWS][CARD_TILE_W];
 static uint16_t cursor_hotspot_x = 0;
 static uint16_t cursor_hotspot_y = 0;
+static uint8_t drag_active = FLAG_OFF;
+static int16_t drag_offset_x = 0;
+static int16_t drag_offset_y = 0;
 static uint8_t game_won = FLAG_OFF;
 
 static void cancel_selection(void);
@@ -80,9 +84,14 @@ static uint8_t cursor_tile_y(void);
 static void draw_selected_marker(void);
 static uint8_t current_selector_x(void);
 static uint8_t current_selector_y(void);
+static uint8_t finish_mouse_drag_to_cursor(void);
+static uint8_t handle_stock_action(void);
+static uint8_t move_selected_to_foundation(uint8_t foundation);
+static uint8_t move_selected_to_tableau(uint8_t dest_col);
 static void redraw_hand_markers(void);
 static uint8_t selection_matches(uint8_t row, uint8_t col, uint8_t depth);
 static void select_card(uint8_t row, uint8_t col, uint8_t depth, uint8_t count, uint8_t card);
+static uint8_t tableau_depth_at_cursor(void);
 
 static uint8_t rand_bounded_u8(uint8_t max_inclusive)
 {
@@ -305,6 +314,8 @@ static void render_win_message(void)
 {
     clear_selected_marker();
     selected_active = FLAG_OFF;
+    drag_active = FLAG_OFF;
+    render_clear_drag_stack();
     render_set_cursor_visible(FLAG_OFF);
     render_clear_ui_layer();
     render_draw_text_centered(WIN_MESSAGE_Y, "WELL DONE!");
@@ -330,6 +341,208 @@ static void show_invalid_move_feedback(void)
         redraw_hand_markers();
         wait_frames(INVALID_MOVE_BLINK_FRAMES);
     }
+}
+
+static void select_drag_card(uint8_t row, uint8_t col, uint8_t depth, uint8_t count, uint8_t card)
+{
+    cancel_selection();
+    selected_active = FLAG_ON;
+    selected_row = row;
+    selected_col = col;
+    selected_depth = depth;
+    selected_count = count;
+    selected_card = card;
+}
+
+static void redraw_selected_source(void)
+{
+    if (selected_row == SELECTOR_ROW_TOP) {
+        render_stock_and_waste();
+    } else if (selected_row == SELECTOR_ROW_TABLEAU) {
+        redraw_tableau_column(selected_col);
+    }
+}
+
+static void hide_drag_source(void)
+{
+    if (selected_row == SELECTOR_ROW_TOP) {
+        draw_top_pile(TOP_PILE_WASTE, FLAG_OFF, FLAG_OFF, CARD_FACE_UP);
+        return;
+    }
+
+    if (selected_row == SELECTOR_ROW_TABLEAU) {
+        render_restore_tile_area(
+            kTableauLeftX[selected_col],
+            SOLITAIRE_TABLEAU_START_Y,
+            CARD_TILE_W,
+            kTableauRestoreHeight);
+
+        for (uint8_t depth = 0; depth < selected_depth; depth++) {
+            draw_tableau_card(selected_col, depth);
+        }
+    }
+}
+
+static uint8_t selected_stack_card(uint8_t offset)
+{
+    if (selected_row == SELECTOR_ROW_TOP) {
+        return selected_card;
+    }
+
+    return tableau[selected_col][(uint8_t)(selected_depth + offset)].card;
+}
+
+static uint8_t build_drag_stack_grid(void)
+{
+    uint8_t rows = FLAG_OFF;
+
+    for (uint8_t i = 0; i < selected_count; i++) {
+        assets_build_card_tile_grid(scratch_card_grid, selected_stack_card(i));
+
+        if ((uint8_t)(i + FLAG_ON) < selected_count) {
+            for (uint8_t col = 0; col < CARD_TILE_W; col++) {
+                drag_stack_grid[rows][col] = scratch_card_grid[0][col];
+            }
+            rows++;
+        } else {
+            for (uint8_t row = 0; row < CARD_TILE_H; row++) {
+                for (uint8_t col = 0; col < CARD_TILE_W; col++) {
+                    drag_stack_grid[(uint8_t)(rows + row)][col] = scratch_card_grid[row][col];
+                }
+            }
+            rows = (uint8_t)(rows + CARD_TILE_H);
+        }
+    }
+
+    return rows;
+}
+
+static uint16_t drag_origin_pixel(uint16_t cursor_pixel, int16_t offset)
+{
+    int16_t origin = (int16_t)cursor_pixel - offset;
+
+    if (origin < 0) {
+        return 0;
+    }
+
+    return (uint16_t)origin;
+}
+
+static uint16_t drag_stack_pixel_x(void)
+{
+    return drag_origin_pixel(cursor_hotspot_x, drag_offset_x);
+}
+
+static uint16_t drag_stack_pixel_y(void)
+{
+    return drag_origin_pixel(cursor_hotspot_y, drag_offset_y);
+}
+
+static void setup_drag_stack_sprites(void)
+{
+    render_set_drag_stack(
+        drag_stack_pixel_x(),
+        drag_stack_pixel_y(),
+        build_drag_stack_grid(),
+        drag_stack_grid);
+}
+
+static void update_drag_stack_sprites(void)
+{
+    render_move_drag_stack(drag_stack_pixel_x(), drag_stack_pixel_y());
+}
+
+static uint8_t start_mouse_drag_from_selection(void)
+{
+    uint16_t source_x;
+    uint16_t source_y;
+
+    if (!selected_active) {
+        return FLAG_OFF;
+    }
+
+    source_x = (uint16_t)(
+        ((selected_row == SELECTOR_ROW_TOP) ? kTopRowLeftX[selected_col] : kTableauLeftX[selected_col]) *
+        TILE_PIXELS);
+    source_y = (uint16_t)(
+        ((selected_row == SELECTOR_ROW_TOP) ? kTopRowCardY : (uint8_t)(SOLITAIRE_TABLEAU_START_Y + selected_depth)) *
+        TILE_PIXELS);
+    drag_offset_x = (int16_t)cursor_hotspot_x - (int16_t)source_x;
+    drag_offset_y = (int16_t)cursor_hotspot_y - (int16_t)source_y;
+    drag_active = FLAG_ON;
+
+    hide_drag_source();
+    setup_drag_stack_sprites();
+    return FLAG_ON;
+}
+
+static uint8_t start_mouse_drag(void)
+{
+    uint8_t depth;
+    uint8_t count;
+    uint8_t card;
+
+    if (selector_row == SELECTOR_ROW_TOP) {
+        if (selector_col == TOP_PILE_STOCK) {
+            return handle_stock_action();
+        }
+
+        if (selector_col != TOP_PILE_WASTE || waste_count == FLAG_OFF) {
+            return FLAG_OFF;
+        }
+
+        depth = (uint8_t)(waste_count - FLAG_ON);
+        card = waste[depth];
+        select_drag_card(SELECTOR_ROW_TOP, TOP_PILE_WASTE, depth, FLAG_ON, card);
+        return start_mouse_drag_from_selection();
+    }
+
+    depth = tableau_depth_at_cursor();
+    if (depth == NO_TABLEAU_DEPTH) {
+        return FLAG_OFF;
+    }
+
+    count = (uint8_t)(tableau_count[selector_col] - depth);
+    card = tableau[selector_col][depth].card;
+    select_drag_card(SELECTOR_ROW_TABLEAU, selector_col, depth, count, card);
+    return start_mouse_drag_from_selection();
+}
+
+static uint8_t finish_mouse_drag_to_cursor(void)
+{
+    uint8_t moved = FLAG_OFF;
+
+    if (!drag_active) {
+        return FLAG_OFF;
+    }
+
+    render_clear_drag_stack();
+    drag_active = FLAG_OFF;
+
+    if (selector_row == SELECTOR_ROW_TABLEAU) {
+        moved = move_selected_to_tableau(selector_col);
+    } else if (selector_row == SELECTOR_ROW_TOP && selector_col >= TOP_PILE_FOUNDATION_FIRST) {
+        moved = move_selected_to_foundation((uint8_t)(selector_col - TOP_PILE_FOUNDATION_FIRST));
+    }
+
+    if (!moved) {
+        redraw_selected_source();
+        selected_active = FLAG_OFF;
+    }
+
+    return moved;
+}
+
+static void cancel_mouse_drag(void)
+{
+    if (!drag_active) {
+        return;
+    }
+
+    render_clear_drag_stack();
+    drag_active = FLAG_OFF;
+    redraw_selected_source();
+    selected_active = FLAG_OFF;
 }
 
 static void deal_opening_tableau(uint8_t animate)
@@ -765,7 +978,7 @@ static void sync_cursor_to_selector(void)
 
 static void draw_selected_marker(void)
 {
-    if (selected_active) {
+    if (selected_active && !drag_active) {
         render_set_selected_marker_tile(selected_marker_x(), selected_marker_y(), FLAG_ON);
     }
 }
@@ -945,7 +1158,9 @@ void solitaire_init_controls(void)
     selector_row = SELECTOR_ROW_TOP;
     selector_col = SELECTOR_COL_MIN;
     selected_active = FLAG_OFF;
+    drag_active = FLAG_OFF;
 
+    render_clear_drag_stack();
     render_set_selected_marker_tile(0, 0, FLAG_OFF);
     render_set_cursor_visible(FLAG_ON);
     sync_cursor_to_selector();
@@ -980,13 +1195,19 @@ void solitaire_handle_input(const KeyEvents* ev)
     if (apply_mouse_motion(ev)) {
         moved = FLAG_ON;
     }
+    if (drag_active && (ev->mouse_dx != 0 || ev->mouse_dy != 0)) {
+        update_drag_stack_sprites();
+    }
 
     if (moved) {
         redraw_hand_markers();
     }
 
     if (ev->cancel) {
-        if (ev->mouse_cancel && selected_active) {
+        if (ev->mouse_cancel && drag_active) {
+            cancel_mouse_drag();
+            redraw_hand_markers();
+        } else if (ev->mouse_cancel && selected_active) {
             cancel_selection();
             redraw_hand_markers();
         } else if (undo_selection()) {
@@ -996,8 +1217,30 @@ void solitaire_handle_input(const KeyEvents* ev)
         }
     }
 
+    if (ev->mouse_accept_released && drag_active) {
+        if (!finish_mouse_drag_to_cursor()) {
+            show_invalid_move_feedback();
+        }
+
+        if (game_won) {
+            return;
+        }
+
+        redraw_hand_markers();
+        return;
+    }
+
+    if (ev->mouse_accept) {
+        if (!start_mouse_drag()) {
+            show_invalid_move_feedback();
+        }
+
+        redraw_hand_markers();
+        return;
+    }
+
     if (ev->accept) {
-        if (!handle_select_action(ev->mouse_accept)) {
+        if (!handle_select_action(FLAG_OFF)) {
             show_invalid_move_feedback();
         }
 

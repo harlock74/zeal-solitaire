@@ -52,10 +52,9 @@ zos_err_t input_events_init(void)
         mouse_port = SNES_PORT2;
     }
 
-    // if (mouse_port != INPUT_SNES_PORT_NONE) {
-    //     controller_set_mouse_sensitivity(mouse_port, MOUSE_MEDIUM);
-    //     controller_set_mouse_sensitivity(mouse_port, MOUSE_MEDIUM);
-    // }
+    if (mouse_port != INPUT_SNES_PORT_NONE) {
+        controller_set_mouse_sensitivity(mouse_port, MOUSE_HIGH);
+    }
 
     previous_input = read_button_input();
     previous_mouse_buttons = read_mouse_buttons();
@@ -73,6 +72,7 @@ void input_poll_events(KeyEvents* ev)
     uint16_t pressed_input = (current_input & ~previous_input);
     uint16_t current_mouse_buttons = read_mouse_buttons();
     uint16_t pressed_mouse_buttons = (current_mouse_buttons & ~previous_mouse_buttons);
+    uint16_t released_mouse_buttons = (previous_mouse_buttons & ~current_mouse_buttons);
 
     if (mouse_port != INPUT_SNES_PORT_NONE && controller_read_mouse(mouse_port)) {
         ev->mouse_dx = controller_get_mousex();
@@ -87,6 +87,8 @@ void input_poll_events(KeyEvents* ev)
     ev->left = (pressed_input & BUTTON_LEFT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->right = (pressed_input & BUTTON_RIGHT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->mouse_accept = (pressed_mouse_buttons & MOUSE_LEFT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
+    ev->mouse_accept_held = (current_mouse_buttons & MOUSE_LEFT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
+    ev->mouse_accept_released = (released_mouse_buttons & MOUSE_LEFT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->accept = ((pressed_input & BUTTON_B) || ev->mouse_accept) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->mouse_cancel = (pressed_mouse_buttons & MOUSE_RIGHT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->cancel = ((pressed_input & BUTTON_A) || ev->mouse_cancel) ? EVENT_PRESSED : EVENT_NOT_PRESSED;

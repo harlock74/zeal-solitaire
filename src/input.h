@@ -14,6 +14,8 @@ typedef struct {
     uint8_t right;
     uint8_t accept;
     uint8_t mouse_accept;
+    uint8_t mouse_accept_held;
+    uint8_t mouse_accept_released;
     uint8_t cancel;
     uint8_t mouse_cancel;
     uint8_t start;

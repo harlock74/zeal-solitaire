@@ -28,6 +28,7 @@
 #define CARD_TILE_H 4
 #define CARD_RANK_COUNT 13
 #define CARD_SUIT_COUNT 4
+#define CARD_STACK_SPRITE_MAX_ROWS (CARD_RANK_COUNT - 1 + CARD_TILE_H)
 
 /* Solitaire setup constants (non-magic, easy to tweak in one place). */
 #define SOLITAIRE_DECK_SIZE 52
