@@ -18,22 +18,27 @@ static uint16_t read_controller_input(void)
 {
     uint16_t input = keyboard_read();
 
-    if (pad_port != INPUT_SNES_PORT_NONE || mouse_port != INPUT_SNES_PORT_NONE) {
-        controller_read_port(SNES_PORT1);
-    }
     if (pad_port != INPUT_SNES_PORT_NONE) {
-        input |= controller_get(pad_port);
+        uint16_t pad = controller_read_pad(pad_port);
+        if (controller_pad_valid(pad)) {
+            input |= pad;
+        }
     }
     return input;
 }
 
-static uint16_t get_mouse_buttons(void)
+static uint16_t read_mouse_buttons(ControllerMouse *mouse)
 {
-    if (mouse_port == INPUT_SNES_PORT_NONE) {
+    /* Buttons and movement must come from the same complete transaction. */
+    if (mouse_port == INPUT_SNES_PORT_NONE ||
+        controller_read_mouse(mouse_port, mouse) == MOUSE_ERROR) {
+        mouse->bits = 0;
+        mouse->x = 0;
+        mouse->y = 0;
         return 0;
     }
 
-    return controller_get(mouse_port);
+    return mouse->bits & (MOUSE_LEFT | MOUSE_RIGHT);
 }
 
 zos_err_t input_events_init(void)
@@ -45,14 +50,14 @@ zos_err_t input_events_init(void)
 
     pad_port = INPUT_SNES_PORT_NONE;
     mouse_port = INPUT_SNES_PORT_NONE;
-    if(controller_is(SNES_PORT1, SNES_PAD)) {
+    if(controller_is_pad(SNES_PORT1)) {
         pad_port = SNES_PORT1;
-    } else if (controller_is(SNES_PORT2, SNES_PAD)) {
+    } else if (controller_is_pad(SNES_PORT2)) {
         pad_port = SNES_PORT2;
     }
-    if (controller_is(SNES_PORT1, SNES_MOUSE)) {
+    if (controller_is_mouse(SNES_PORT1)) {
         mouse_port = SNES_PORT1;
-    } else if(controller_is(SNES_PORT2, SNES_MOUSE)) {
+    } else if(controller_is_mouse(SNES_PORT2)) {
         mouse_port = SNES_PORT2;
     }
 
@@ -61,11 +66,9 @@ zos_err_t input_events_init(void)
         controller_set_mouse_sensitivity(mouse_port, MOUSE_MEDIUM);
     }
 
+    ControllerMouse mouse;
     previous_input = read_controller_input();
-    if (mouse_port != INPUT_SNES_PORT_NONE) {
-        controller_read_mouse(mouse_port);
-    }
-    previous_mouse_buttons = get_mouse_buttons();
+    previous_mouse_buttons = read_mouse_buttons(&mouse);
     return ERR_SUCCESS;
 }
 
@@ -82,15 +85,11 @@ void input_poll_events(KeyEvents* ev)
     uint16_t pressed_mouse_buttons;
     uint16_t released_mouse_buttons;
 
-    if (mouse_port != INPUT_SNES_PORT_NONE && controller_read_mouse(mouse_port)) {
-        ev->mouse_dx = controller_get_mousex();
-        ev->mouse_dy = controller_get_mousey();
-    } else {
-        ev->mouse_dx = 0;
-        ev->mouse_dy = 0;
-    }
+    ControllerMouse mouse;
+    current_mouse_buttons = read_mouse_buttons(&mouse);
+    ev->mouse_dx = mouse.x;
+    ev->mouse_dy = mouse.y;
 
-    current_mouse_buttons = get_mouse_buttons();
     pressed_mouse_buttons = (current_mouse_buttons & ~previous_mouse_buttons);
     released_mouse_buttons = (previous_mouse_buttons & ~current_mouse_buttons);
 
