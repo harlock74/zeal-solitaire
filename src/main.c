@@ -33,7 +33,7 @@ static void print_error(const char* prefix, uint16_t value)
 static void load_ui_font_tiles(void)
 {
     /*
-     * nprint_string writes to layer 1; map spaces to the transparent tile
+     * hud_tilemap_nput_s writes to layer 1; map spaces to the transparent tile
      * so centered text and clears do not leave visible blocks.
      */
     ascii_map(' ', 1, EMPTY_TILE);

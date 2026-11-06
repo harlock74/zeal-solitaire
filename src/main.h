@@ -18,7 +18,7 @@
 /* Tiled tile IDs requested for the moving hand and picked-up-card marker. */
 #define HAND_SELECTOR_TILE 79
 #define HAND_CLOSED_SELECTOR_TILE 125
-/* Direct tileset IDs used by ZGDK nprint_string() text rendering. */
+/* Direct tileset IDs used by ZGDK hud_tilemap_nput_s() text rendering. */
 #define FONT_ALPHA_A_TILE 80
 #define FONT_DIGIT_TILE 115
 #define FONT_EXCL_TILE 78

@@ -111,7 +111,7 @@ void render_draw_text(uint8_t x0, uint8_t y, const char* text)
         p++;
     }
 
-    nprint_string(&vctx, text, len, x0, y);
+    hud_tilemap_nput_s(&vctx, text, len, x0, y);
 }
 
 void render_draw_text_centered(uint8_t y, const char* text)
