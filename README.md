@@ -8,9 +8,9 @@ It runs at **640×480 @8bpp**
 
 ## Screenshots
 
-| GamePlay  | Gameplay |
-| - | - |
-| ![image](https://github.com/harlock74/zeal-solitaire/blob/main/docs/screenshots/1.png) | ![image](https://github.com/harlock74/zeal-solitaire/blob/main/docs/screenshots/2.png) |
+| GamePlay                         | Gameplay                         |
+| -------------------------------- | -------------------------------- |
+| ![image](docs/screenshots/1.png) | ![image](docs/screenshots/2.png) |
 
 ## Rules
 
@@ -18,7 +18,8 @@ Based on the classic klondike solitaire game.
 
 ## Controls
 
-- SNES mouse supported
+- SNES pad supported (Port 1)
+- SNES mouse supported (Port 2)
 - `UP` `DOWN` `LEFT` `RIGHT` (or SNES D-pad): move hand selector around
 - `SPACE` (or SNES `B` or or mouse left click): reveal selected card
 - `X` (or SNES `A` or or mouse right click): undo previous card selection

@@ -9,23 +9,8 @@
 #define INPUT_USE_CONTROLLER 1
 #define INPUT_SNES_PORT_NONE 0xFF
 
-static uint16_t previous_input;
 static uint16_t previous_mouse_buttons;
-static uint8_t pad_port;
 static uint8_t mouse_port;
-
-static uint16_t read_controller_input(void)
-{
-    uint16_t input = keyboard_read();
-
-    if (pad_port != INPUT_SNES_PORT_NONE) {
-        uint16_t pad = controller_read_pad(pad_port);
-        if (controller_pad_valid(pad)) {
-            input |= pad;
-        }
-    }
-    return input;
-}
 
 static uint16_t read_mouse_buttons(ControllerMouse *mouse)
 {
@@ -48,13 +33,7 @@ zos_err_t input_events_init(void)
         return err;
     }
 
-    pad_port = INPUT_SNES_PORT_NONE;
     mouse_port = INPUT_SNES_PORT_NONE;
-    if(controller_is_pad(SNES_PORT1)) {
-        pad_port = SNES_PORT1;
-    } else if (controller_is_pad(SNES_PORT2)) {
-        pad_port = SNES_PORT2;
-    }
     if (controller_is_mouse(SNES_PORT1)) {
         mouse_port = SNES_PORT1;
     } else if(controller_is_mouse(SNES_PORT2)) {
@@ -67,8 +46,8 @@ zos_err_t input_events_init(void)
     }
 
     ControllerMouse mouse;
-    previous_input = read_controller_input();
     previous_mouse_buttons = read_mouse_buttons(&mouse);
+    input_flush();
     return ERR_SUCCESS;
 }
 
@@ -79,14 +58,20 @@ void input_poll_events(KeyEvents* ev)
      * arrows/D-pad move, keyboard Space/Z maps to SNES B,
      * and keyboard X maps to SNES A for selection undo.
      */
-    uint16_t current_input = read_controller_input();
-    uint16_t pressed_input = (current_input & ~previous_input);
+    /* The previous poll flushed keyboard state and suppressed held pad
+     * buttons, so this snapshot contains fresh keyboard/pad activations.
+     */
+    uint16_t pressed_input = input_read();
     uint16_t current_mouse_buttons;
     uint16_t pressed_mouse_buttons;
     uint16_t released_mouse_buttons;
 
     ControllerMouse mouse;
     current_mouse_buttons = read_mouse_buttons(&mouse);
+    /* Consume keyboard/pad taps, clear stale keys, and suppress held pad
+     * buttons through ZGDK. Keep mouse state for dragging and release edges.
+     */
+    input_flush();
     ev->mouse_dx = mouse.x;
     ev->mouse_dy = mouse.y;
 
@@ -106,6 +91,5 @@ void input_poll_events(KeyEvents* ev)
     ev->start = (pressed_input & BUTTON_START) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
     ev->quit = (pressed_input & BUTTON_SELECT) ? EVENT_PRESSED : EVENT_NOT_PRESSED;
 
-    previous_input = current_input;
     previous_mouse_buttons = current_mouse_buttons;
 }

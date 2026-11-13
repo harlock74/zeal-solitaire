@@ -6,6 +6,8 @@ build/
 build-*/
 bin/
 debug/
+tmp/
+tests/
 
 # CMake generated files
 CMakeCache.txt
