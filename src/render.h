@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include "main.h"
 
-void render_request_sprite_refresh(void);
 void render_table(void);
 void render_place_card_grid(uint8_t x0, uint8_t y0, const uint8_t grid[CARD_TILE_H][CARD_TILE_W]);
 void render_restore_tile_area(uint8_t x0, uint8_t y0, uint8_t width, uint8_t height);
