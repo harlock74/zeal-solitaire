@@ -24,6 +24,17 @@ static gfx_sprite* cursor_sprite;
 static gfx_sprite* selected_marker_sprite;
 static gfx_sprite* drag_stack_sprites[DRAG_STACK_SPRITES];
 static uint8_t drag_stack_sprite_count;
+static uint8_t sprites_dirty = FLAG_ON;
+
+static void set_sprite(gfx_sprite* sprite, uint8_t tile, uint16_t x, uint16_t y)
+{
+    if (sprite->tile != tile || sprite->x != x || sprite->y != y) {
+        sprite->tile = tile;
+        sprite->x = x;
+        sprite->y = y;
+        sprites_dirty = FLAG_ON;
+    }
+}
 
 static uint8_t tile_coord_visible(uint8_t x, uint8_t y)
 {
@@ -47,6 +58,7 @@ static uint16_t sprite_pos_from_tile(uint8_t tile)
 
 void render_table(void)
 {
+    sprites_dirty = FLAG_ON;
     /*
      * Milestone 1 target:
      * draw the static Solitaire tilemap exactly as exported from Tiled.
@@ -94,6 +106,8 @@ void render_restore_card_area(uint8_t x0, uint8_t y0)
 
 void render_clear_ui_layer(void)
 {
+    /* The win screen clears the gameplay overlays. */
+    sprites_dirty = FLAG_ON;
     for (uint8_t y = 0; y < SCREEN_TILE_H; y++) {
         for (uint8_t x = 0; x < SCREEN_TILE_W; x++) {
             gfx_tilemap_place(&vctx, EMPTY_TILE, LAYER_UI, x, y);
@@ -140,6 +154,7 @@ gfx_error render_init_sprites(void)
     if (sprites_register_arena(sprite_arena, SPRITE_ARENA_CAPACITY) != GFX_SUCCESS) {
         return GFX_FAILURE;
     }
+    sprites_dirty = FLAG_ON;
 
     cursor_sprite = sprites_register(sprite);
     selected_marker_sprite = sprites_register(sprite);
@@ -163,8 +178,11 @@ void render_set_cursor_pixel(uint16_t hotspot_x, uint16_t hotspot_y)
         return;
     }
 
-    cursor_sprite->x = sprite_x_from_hotspot(hotspot_x);
-    cursor_sprite->y = sprite_y_from_hotspot(hotspot_y);
+    set_sprite(
+        cursor_sprite,
+        cursor_sprite->tile,
+        sprite_x_from_hotspot(hotspot_x),
+        sprite_y_from_hotspot(hotspot_y));
 }
 
 void render_set_cursor_visible(uint8_t visible)
@@ -173,7 +191,11 @@ void render_set_cursor_visible(uint8_t visible)
         return;
     }
 
-    cursor_sprite->tile = visible ? HAND_SELECTOR_TILE : EMPTY_TILE;
+    set_sprite(
+        cursor_sprite,
+        visible ? HAND_SELECTOR_TILE : EMPTY_TILE,
+        cursor_sprite->x,
+        cursor_sprite->y);
 }
 
 void render_set_selected_marker_tile(uint8_t tile_x, uint8_t tile_y, uint8_t visible)
@@ -182,9 +204,11 @@ void render_set_selected_marker_tile(uint8_t tile_x, uint8_t tile_y, uint8_t vis
         return;
     }
 
-    selected_marker_sprite->tile = visible ? HAND_CLOSED_SELECTOR_TILE : EMPTY_TILE;
-    selected_marker_sprite->x = sprite_pos_from_tile(tile_x);
-    selected_marker_sprite->y = sprite_pos_from_tile(tile_y);
+    set_sprite(
+        selected_marker_sprite,
+        visible ? HAND_CLOSED_SELECTOR_TILE : EMPTY_TILE,
+        sprite_pos_from_tile(tile_x),
+        sprite_pos_from_tile(tile_y));
 }
 
 void render_set_drag_stack(
@@ -198,11 +222,11 @@ void render_set_drag_stack(
     drag_stack_sprite_count = (uint8_t)(rows * CARD_TILE_W);
     for (uint8_t row = 0; row < rows; row++) {
         for (uint8_t col = 0; col < CARD_TILE_W; col++) {
-            gfx_sprite* sprite = drag_stack_sprites[sprite_index];
-
-            sprite->tile = grid[row][col];
-            sprite->x = (uint16_t)(pixel_x + ((uint16_t)col * TILE_PIXELS) + TILE_PIXELS);
-            sprite->y = (uint16_t)(pixel_y + ((uint16_t)row * TILE_PIXELS) + TILE_PIXELS);
+            set_sprite(
+                drag_stack_sprites[sprite_index],
+                grid[row][col],
+                (uint16_t)(pixel_x + ((uint16_t)col * TILE_PIXELS) + TILE_PIXELS),
+                (uint16_t)(pixel_y + ((uint16_t)row * TILE_PIXELS) + TILE_PIXELS));
             sprite_index++;
         }
     }
@@ -217,8 +241,11 @@ void render_move_drag_stack(uint16_t pixel_x, uint16_t pixel_y)
         for (uint8_t col = 0; col < CARD_TILE_W; col++) {
             gfx_sprite* sprite = drag_stack_sprites[sprite_index];
 
-            sprite->x = (uint16_t)(pixel_x + ((uint16_t)col * TILE_PIXELS) + TILE_PIXELS);
-            sprite->y = (uint16_t)(pixel_y + ((uint16_t)row * TILE_PIXELS) + TILE_PIXELS);
+            set_sprite(
+                sprite,
+                sprite->tile,
+                (uint16_t)(pixel_x + ((uint16_t)col * TILE_PIXELS) + TILE_PIXELS),
+                (uint16_t)(pixel_y + ((uint16_t)row * TILE_PIXELS) + TILE_PIXELS));
             sprite_index++;
         }
     }
@@ -227,12 +254,16 @@ void render_move_drag_stack(uint16_t pixel_x, uint16_t pixel_y)
 void render_clear_drag_stack(void)
 {
     for (uint8_t i = 0; i < drag_stack_sprite_count; i++) {
-        drag_stack_sprites[i]->tile = EMPTY_TILE;
+        gfx_sprite* sprite = drag_stack_sprites[i];
+
+        set_sprite(sprite, EMPTY_TILE, sprite->x, sprite->y);
     }
     drag_stack_sprite_count = FLAG_OFF;
 }
 
 void render_draw_sprites(void)
 {
-    sprites_render(&vctx);
+    if (sprites_dirty && sprites_render(&vctx) == GFX_SUCCESS) {
+        sprites_dirty = FLAG_OFF;
+    }
 }
