@@ -15,6 +15,7 @@
  */
 #define DRAG_STACK_SPRITES (CARD_STACK_SPRITE_MAX_ROWS * CARD_TILE_W)
 #define SPRITE_ARENA_CAPACITY (2 + DRAG_STACK_SPRITES + 1)
+#define SPRITE_UPLOAD_CHUNK 4
 #define CURSOR_HOTSPOT_X 9
 #define CURSOR_HOTSPOT_Y 4
 #define TILE_PIXELS 16
@@ -24,6 +25,15 @@ static gfx_sprite* cursor_sprite;
 static gfx_sprite* selected_marker_sprite;
 static gfx_sprite* drag_stack_sprites[DRAG_STACK_SPRITES];
 static uint8_t drag_stack_sprite_count;
+/* Includes slots that may still be visible after a partial upload. */
+static uint8_t upload_extent;
+
+static void hide_sprite(gfx_sprite* sprite)
+{
+    sprite->x = 0;
+    sprite->y = 0;
+    sprite->tile = EMPTY_TILE;
+}
 
 static uint8_t tile_coord_visible(uint8_t x, uint8_t y)
 {
@@ -130,12 +140,19 @@ void render_draw_text_centered(uint8_t y, const char* text)
 gfx_error render_init_sprites(void)
 {
     gfx_sprite sprite = {
-        .y = 16,
-        .x = 16,
+        .y = 0,
+        .x = 0,
         .tile = EMPTY_TILE,
         .flags = SPRITE_NONE,
         .options = SPRITE_OPTION_NONE,
     };
+
+    gfx_error err = sprites_clear(&vctx);
+    if (err != GFX_SUCCESS) {
+        return err;
+    }
+    drag_stack_sprite_count = 0;
+    upload_extent = 0;
 
     if (sprites_register_arena(sprite_arena, SPRITE_ARENA_CAPACITY) != GFX_SUCCESS) {
         return GFX_FAILURE;
@@ -182,7 +199,12 @@ void render_set_selected_marker_tile(uint8_t tile_x, uint8_t tile_y, uint8_t vis
         return;
     }
 
-    selected_marker_sprite->tile = visible ? HAND_CLOSED_SELECTOR_TILE : EMPTY_TILE;
+    if (!visible) {
+        hide_sprite(selected_marker_sprite);
+        return;
+    }
+
+    selected_marker_sprite->tile = HAND_CLOSED_SELECTOR_TILE;
     selected_marker_sprite->x = sprite_pos_from_tile(tile_x);
     selected_marker_sprite->y = sprite_pos_from_tile(tile_y);
 }
@@ -195,7 +217,11 @@ void render_set_drag_stack(
 {
     uint8_t sprite_index = 0;
 
-    drag_stack_sprite_count = (uint8_t)(rows * CARD_TILE_W);
+    uint8_t count = (uint8_t)(rows * CARD_TILE_W);
+    for (uint8_t i = count; i < drag_stack_sprite_count; i++) {
+        hide_sprite(drag_stack_sprites[i]);
+    }
+    drag_stack_sprite_count = count;
     for (uint8_t row = 0; row < rows; row++) {
         for (uint8_t col = 0; col < CARD_TILE_W; col++) {
             gfx_sprite* sprite = drag_stack_sprites[sprite_index];
@@ -227,12 +253,33 @@ void render_move_drag_stack(uint16_t pixel_x, uint16_t pixel_y)
 void render_clear_drag_stack(void)
 {
     for (uint8_t i = 0; i < drag_stack_sprite_count; i++) {
-        drag_stack_sprites[i]->tile = EMPTY_TILE;
+        hide_sprite(drag_stack_sprites[i]);
     }
     drag_stack_sprite_count = FLAG_OFF;
 }
 
 void render_draw_sprites(void)
 {
-    sprites_render(&vctx);
+    uint8_t active_count = drag_stack_sprite_count ?
+        (uint8_t)(2 + drag_stack_sprite_count) :
+        (selected_marker_sprite->tile != EMPTY_TILE ? 2 : 1);
+
+    /* Retire the old tail once before reducing the rendered prefix. Keep the
+     * extent on failure, including growth that may have reached hardware.
+     */
+    if (active_count > upload_extent) {
+        upload_extent = active_count;
+    }
+    for (uint8_t slot = 0; slot < upload_extent;) {
+        uint8_t count = (uint8_t)(upload_extent - slot);
+        if (count > SPRITE_UPLOAD_CHUNK) {
+            count = SPRITE_UPLOAD_CHUNK;
+        }
+        /* The SDK masks interrupts while VRAM is mapped; bound each copy. */
+        if (gfx_sprite_render_array(&vctx, slot, &sprite_arena[slot], count) != GFX_SUCCESS) {
+            return;
+        }
+        slot += count;
+    }
+    upload_extent = active_count;
 }
