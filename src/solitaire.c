@@ -714,6 +714,7 @@ static uint8_t handle_stock_action(void)
     }
 
     render_stock_and_waste();
+    render_request_sprite_refresh();
     return FLAG_ON;
 }
 
@@ -1211,6 +1212,7 @@ void solitaire_handle_input(const KeyEvents* ev)
             cancel_selection();
             redraw_hand_markers();
         } else if (undo_selection()) {
+            render_request_sprite_refresh();
             redraw_hand_markers();
         } else {
             show_invalid_move_feedback();

@@ -9,12 +9,11 @@
 #include "assets.h"
 #include "render.h"
 
-/*
- * ZGDK's arena guard leaves one spare slot. A dragged king run uses 12
- * covered rows plus one full 3x4 card: 16 rows * 3 sprites.
- */
+/* A king run needs 12 covered rows plus the final full 3x4 card. */
 #define DRAG_STACK_SPRITES (CARD_STACK_SPRITE_MAX_ROWS * CARD_TILE_W)
-#define SPRITE_ARENA_CAPACITY (2 + DRAG_STACK_SPRITES + 1)
+#define SPRITE_COUNT (2 + DRAG_STACK_SPRITES)
+#define SPRITE_ARENA_CAPACITY (SPRITE_COUNT + 1)
+#define SPRITE_UPLOAD_CHUNK 4
 #define CURSOR_HOTSPOT_X 9
 #define CURSOR_HOTSPOT_Y 4
 #define TILE_PIXELS 16
@@ -24,7 +23,10 @@ static gfx_sprite* cursor_sprite;
 static gfx_sprite* selected_marker_sprite;
 static gfx_sprite* drag_stack_sprites[DRAG_STACK_SPRITES];
 static uint8_t drag_stack_sprite_count;
-static uint8_t sprites_dirty = FLAG_ON;
+static uint8_t sprite_dirty[SPRITE_COUNT];
+static uint8_t first_dirty = SPRITE_COUNT;
+static uint8_t end_dirty;
+static uint8_t full_refresh = FLAG_ON;
 
 static void set_sprite(gfx_sprite* sprite, uint8_t tile, uint16_t x, uint16_t y)
 {
@@ -32,7 +34,14 @@ static void set_sprite(gfx_sprite* sprite, uint8_t tile, uint16_t x, uint16_t y)
         sprite->tile = tile;
         sprite->x = x;
         sprite->y = y;
-        sprites_dirty = FLAG_ON;
+        uint8_t slot = (uint8_t)(sprite - sprite_arena);
+        sprite_dirty[slot] = FLAG_ON;
+        if (slot < first_dirty) {
+            first_dirty = slot;
+        }
+        if (slot >= end_dirty) {
+            end_dirty = (uint8_t)(slot + 1);
+        }
     }
 }
 
@@ -56,9 +65,14 @@ static uint16_t sprite_pos_from_tile(uint8_t tile)
     return (uint16_t)(((uint16_t)tile * TILE_PIXELS) + TILE_PIXELS);
 }
 
+void render_request_sprite_refresh(void)
+{
+    full_refresh = FLAG_ON;
+}
+
 void render_table(void)
 {
-    sprites_dirty = FLAG_ON;
+    render_request_sprite_refresh();
     /*
      * Milestone 1 target:
      * draw the static Solitaire tilemap exactly as exported from Tiled.
@@ -107,7 +121,7 @@ void render_restore_card_area(uint8_t x0, uint8_t y0)
 void render_clear_ui_layer(void)
 {
     /* The win screen clears the gameplay overlays. */
-    sprites_dirty = FLAG_ON;
+    render_request_sprite_refresh();
     for (uint8_t y = 0; y < SCREEN_TILE_H; y++) {
         for (uint8_t x = 0; x < SCREEN_TILE_W; x++) {
             gfx_tilemap_place(&vctx, EMPTY_TILE, LAYER_UI, x, y);
@@ -154,7 +168,7 @@ gfx_error render_init_sprites(void)
     if (sprites_register_arena(sprite_arena, SPRITE_ARENA_CAPACITY) != GFX_SUCCESS) {
         return GFX_FAILURE;
     }
-    sprites_dirty = FLAG_ON;
+    render_request_sprite_refresh();
 
     cursor_sprite = sprites_register(sprite);
     selected_marker_sprite = sprites_register(sprite);
@@ -219,7 +233,12 @@ void render_set_drag_stack(
 {
     uint8_t sprite_index = 0;
 
-    drag_stack_sprite_count = (uint8_t)(rows * CARD_TILE_W);
+    uint8_t count = (uint8_t)(rows * CARD_TILE_W);
+    for (uint8_t i = count; i < drag_stack_sprite_count; i++) {
+        gfx_sprite* sprite = drag_stack_sprites[i];
+        set_sprite(sprite, EMPTY_TILE, sprite->x, sprite->y);
+    }
+    drag_stack_sprite_count = count;
     for (uint8_t row = 0; row < rows; row++) {
         for (uint8_t col = 0; col < CARD_TILE_W; col++) {
             set_sprite(
@@ -261,9 +280,60 @@ void render_clear_drag_stack(void)
     drag_stack_sprite_count = FLAG_OFF;
 }
 
+static gfx_error hide_unregistered_sprites(void)
+{
+    /* Zero coordinates hide a hardware slot even if it was a tall sprite. */
+    static const gfx_sprite hidden[SPRITE_UPLOAD_CHUNK] = {{0}};
+    for (uint8_t slot = SPRITE_COUNT; slot < GFX_SPRITES_COUNT;) {
+        uint8_t count = (uint8_t)(GFX_SPRITES_COUNT - slot);
+        if (count > SPRITE_UPLOAD_CHUNK) {
+            count = SPRITE_UPLOAD_CHUNK;
+        }
+        gfx_error err = gfx_sprite_render_array(&vctx, slot, hidden, count);
+        if (err != GFX_SUCCESS) {
+            return err;
+        }
+        slot += count;
+    }
+    return GFX_SUCCESS;
+}
+
 void render_draw_sprites(void)
 {
-    if (sprites_dirty && sprites_render(&vctx) == GFX_SUCCESS) {
-        sprites_dirty = FLAG_OFF;
+    if (full_refresh) {
+        if (sprites_render(&vctx) != GFX_SUCCESS ||
+            hide_unregistered_sprites() != GFX_SUCCESS) {
+            return;
+        }
+        full_refresh = FLAG_OFF;
+        for (uint8_t slot = first_dirty; slot < end_dirty; slot++) {
+            sprite_dirty[slot] = FLAG_OFF;
+        }
+        first_dirty = SPRITE_COUNT;
+        end_dirty = 0;
+        return;
     }
+
+    while (first_dirty < end_dirty) {
+        uint8_t slot = first_dirty;
+        if (!sprite_dirty[slot]) {
+            first_dirty++;
+            continue;
+        }
+
+        /* The SDK masks interrupts while VRAM is mapped. Bound each copy. */
+        uint8_t count = 1;
+        while (count < SPRITE_UPLOAD_CHUNK && slot + count < end_dirty &&
+               sprite_dirty[slot + count]) {
+            count++;
+        }
+        if (gfx_sprite_render_array(&vctx, slot, &sprite_arena[slot], count) != GFX_SUCCESS) {
+            return;
+        }
+        do {
+            sprite_dirty[first_dirty++] = FLAG_OFF;
+        } while (--count);
+    }
+    first_dirty = SPRITE_COUNT;
+    end_dirty = 0;
 }
