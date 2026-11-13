@@ -15,7 +15,6 @@
  */
 #define DRAG_STACK_SPRITES (CARD_STACK_SPRITE_MAX_ROWS * CARD_TILE_W)
 #define SPRITE_ARENA_CAPACITY (2 + DRAG_STACK_SPRITES + 1)
-#define SPRITE_UPLOAD_CHUNK 4
 #define CURSOR_HOTSPOT_X 9
 #define CURSOR_HOTSPOT_Y 4
 #define TILE_PIXELS 16
@@ -270,16 +269,8 @@ void render_draw_sprites(void)
     if (active_count > upload_extent) {
         upload_extent = active_count;
     }
-    for (uint8_t slot = 0; slot < upload_extent;) {
-        uint8_t count = (uint8_t)(upload_extent - slot);
-        if (count > SPRITE_UPLOAD_CHUNK) {
-            count = SPRITE_UPLOAD_CHUNK;
-        }
-        /* The SDK masks interrupts while VRAM is mapped; bound each copy. */
-        if (gfx_sprite_render_array(&vctx, slot, &sprite_arena[slot], count) != GFX_SUCCESS) {
-            return;
-        }
-        slot += count;
+    if (sprites_render_range(&vctx, 0, upload_extent) != GFX_SUCCESS) {
+        return;
     }
     upload_extent = active_count;
 }
